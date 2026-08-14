@@ -477,6 +477,15 @@
       <div class="err" id="errMsg">Please fill in your name and let us know if you're coming.</div>
     </form>
 
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+    <form id="gform" action="https://docs.google.com/forms/d/e/1FAIpQLScjP4rY0eV3j9KJMYbPu9btSfmxDarnoZhUTlE7HK8nluU7zw/formResponse" method="POST" target="hidden_iframe" style="display:none;">
+      <input type="text" name="entry.1680819650" id="gf-name">
+      <input type="text" name="entry.1973099450" id="gf-attending">
+      <input type="text" name="entry.1274826450" id="gf-adults">
+      <input type="text" name="entry.1019935221" id="gf-guest">
+      <input type="text" name="entry.840615000" id="gf-note">
+    </form>
+
     <div class="success" id="successMsg">
       <div class="big">Yay! 🎉🩵💛</div>
       <p id="successText">Your RSVP has been received. We can't wait to celebrate with you!</p>
@@ -593,22 +602,16 @@ form.addEventListener('submit', async (e) => {
   submitBtn.textContent = 'Sending…';
 
   try{
-    const GOOGLE_FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLScjP4rY0eV3j9KJMYbPu9btSfmxDarnoZhUTlE7HK8nluU7zw/formResponse';
     const attendingLabel = attending === 'yes' ? 'Yes I can make it.' : "Desperately, I can't.";
 
-    const params = new URLSearchParams();
-    params.append('entry.1680819650', entry.fullName);
-    params.append('entry.1973099450', attendingLabel);
-    params.append('entry.1274826450', entry.adults);
-    params.append('entry.1019935221', entry.guestName);
-    params.append('entry.840615000', entry.note);
+    document.getElementById('gf-name').value = entry.fullName;
+    document.getElementById('gf-attending').value = attendingLabel;
+    document.getElementById('gf-adults').value = entry.adults;
+    document.getElementById('gf-guest').value = entry.guestName;
+    document.getElementById('gf-note').value = entry.note;
+    document.getElementById('gform').submit();
 
-    await fetch(GOOGLE_FORM_ACTION, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString()
-    });
+    await new Promise(resolve => setTimeout(resolve, 900));
 
     document.getElementById('successText').textContent = attending === 'yes'
       ? "Your RSVP has been received. We're saving your place — see you on the dance floor! 🎶"
