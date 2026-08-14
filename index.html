@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -592,9 +593,17 @@ form.addEventListener('submit', async (e) => {
   submitBtn.textContent = 'Sending…';
 
   try{
-    const key = 'rsvp:' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
-    const res = await window.storage.set(key, JSON.stringify(entry), true);
-    if(!res){ throw new Error('save failed'); }
+    const GOOGLE_FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLScjP4rY0eV3j9KJMYbPu9btSfmxDarnoZhUTlE7HK8nluU7zw/formResponse';
+    const attendingLabel = attending === 'yes' ? 'Yes I can make it.' : "Desperately, I can't.";
+
+    const fd = new FormData();
+    fd.append('entry.1680819650', entry.fullName);
+    fd.append('entry.1973099450', attendingLabel);
+    fd.append('entry.1274826450', entry.adults);
+    fd.append('entry.1019935221', entry.guestName);
+    fd.append('entry.840615000', entry.note);
+
+    await fetch(GOOGLE_FORM_ACTION, { method: 'POST', mode: 'no-cors', body: fd });
 
     document.getElementById('successText').textContent = attending === 'yes'
       ? "Your RSVP has been received. We're saving your place — see you on the dance floor! 🎶"
@@ -646,19 +655,62 @@ adminSubmit.addEventListener('click', async () => {
 document.getElementById('refreshBtn').addEventListener('click', loadResponses);
 document.getElementById('csvBtn').addEventListener('click', downloadCSV);
 
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQYUAztE2WGKgyeWzqIx1N8BgQNL0sN9AySQ25vpm41yYQ2884oPlx7OEB0X-DGgd_vI9_x4JRCVm5E/pub?gid=1220375130&single=true&output=csv';
+
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i], n = text[i+1];
+    if(inQuotes){
+      if(c === '"' && n === '"'){ field += '"'; i++; }
+      else if(c === '"'){ inQuotes = false; }
+      else{ field += c; }
+    }else{
+      if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\r'){ /* skip */ }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else{ field += c; }
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.length > 1 || r[0] !== '');
+}
+
+function findCol(headers, ...needles){
+  return headers.findIndex(h => needles.some(n => h.toLowerCase().includes(n)));
+}
+
 async function loadResponses(){
   tableWrap.innerHTML = '<em>Loading…</em>';
   try{
-    const list = await window.storage.list('rsvp:', true);
-    const keys = list && list.keys ? list.keys : [];
-    const rows = [];
-    for(const k of keys){
-      try{
-        const r = await window.storage.get(k, true);
-        if(r && r.value){ rows.push(JSON.parse(r.value)); }
-      }catch(e){}
-    }
-    rows.sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    const res = await fetch(SHEET_CSV_URL + '&_=' + Date.now());
+    if(!res.ok) throw new Error('fetch failed');
+    const text = await res.text();
+    const table = parseCSV(text);
+    if(!table.length){ throw new Error('empty sheet'); }
+
+    const headers = table[0].map(h => h.trim());
+    const iTime = findCol(headers, 'timestamp');
+    const iName = findCol(headers, 'full name', 'name');
+    const iAttending = findCol(headers, 'joining', 'attending');
+    const iAdults = findCol(headers, 'adults');
+    const iGuest = findCol(headers, 'guest');
+    const iNote = findCol(headers, 'know', 'note');
+
+    const rows = table.slice(1).map(r => {
+      const attendingRaw = (r[iAttending] || '').toLowerCase();
+      return {
+        fullName: r[iName] || '',
+        attending: attendingRaw.includes('yes') ? 'yes' : 'no',
+        adults: r[iAdults] || '',
+        guestName: r[iGuest] || '',
+        note: r[iNote] || '',
+        submittedAt: r[iTime] || ''
+      };
+    }).reverse();
+
     cachedRows = rows;
     renderTable(rows);
   }catch(e){
